@@ -554,7 +554,7 @@
             </div>
         </div>
 
-        <!-- Botón mágico para generar enlace para OBS -->
+        <!-- Botón para generar enlace para OBS -->
         <button class="btn-action btn-obs-gen" onclick="generateObsLink()">🔗 Obtener Enlace para OBS</button>
     </div>
 
@@ -585,6 +585,14 @@
     </div>
 
     <script>
+        const BG_PRESETS = {
+            default: 'linear-gradient(135deg, #0b1329 0%, #1c3564 50%, #080c18 100%)',
+            dark: 'linear-gradient(135deg, #090a0f 0%, #161922 50%, #050608 100%)',
+            purple: 'linear-gradient(135deg, #13091f 0%, #391c5e 50%, #08040f 100%)',
+            red: 'linear-gradient(135deg, #1f0909 0%, #5e1c1c 50%, #0f0404 100%)',
+            green: 'linear-gradient(135deg, #091f13 0%, #1c5e39 50%, #040f08 100%)'
+        };
+
         const DEFAULT_DATA = {
             title: "",
             subtitle: "",
@@ -609,7 +617,6 @@
         let state = { ...DEFAULT_DATA };
 
         function loadState() {
-            // Revisar si la URL trae datos empaquetados directamente (Para OBS infalible)
             const urlParams = new URLSearchParams(window.location.search);
             const packedData = urlParams.get('data');
             if (packedData) {
@@ -617,12 +624,11 @@
                     state = JSON.parse(decodeURIComponent(escape(atob(packedData))));
                     return;
                 } catch(e) {
-                    console.error("Error al decodificar datos de OBS");
+                    console.error("Error al decodificar datos");
                 }
             }
 
-            // Si no, carga normal de localStorage
-            const saved = localStorage.getItem('tournament_anim_data_v8');
+            const saved = localStorage.getItem('tournament_anim_data_v9');
             if (saved) {
                 try {
                     state = JSON.parse(saved);
@@ -633,7 +639,7 @@
         }
 
         function saveState() {
-            localStorage.setItem('tournament_anim_data_v8', JSON.stringify(state));
+            localStorage.setItem('tournament_anim_data_v9', JSON.stringify(state));
         }
 
         function generateObsLink() {
