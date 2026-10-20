@@ -712,8 +712,9 @@
             if (urlParams.get('obs') === 'true') {
                 document.body.classList.add('obs-mode');
                 loadState();
-                // Si en OBS no hay datos guardados previamente, pide el archivo
-                if (!state.title && state.teams.length === 4 && !state.teams[0].name) {
+                
+                // Mostrar pantalla de carga si se añade &upload=true o si no hay datos
+                if (urlParams.get('upload') === 'true' || (!state.title && state.teams.length === 4 && !state.teams[0].name)) {
                     document.body.classList.add('needs-file');
                 }
             } else {
