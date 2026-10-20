@@ -584,8 +584,7 @@
     </div>
 
     <script>
-        // Sincronizador en tiempo real entre pestañas (Panel <-> OBS)
-        const channel = new BroadcastChannel('obs_overlay_channel');
+        const channel = new BroadcastChannel('obs_overlay_sync');
 
         const BG_PRESETS = {
             default: 'linear-gradient(135deg, #0b1329 0%, #1c3564 50%, #080c18 100%)',
@@ -619,7 +618,7 @@
         let state = { ...DEFAULT_DATA };
 
         function loadState() {
-            const saved = localStorage.getItem('tournament_anim_data_v2');
+            const saved = localStorage.getItem('tournament_anim_data_v4');
             if (saved) {
                 try {
                     state = JSON.parse(saved);
@@ -630,20 +629,24 @@
         }
 
         function saveState() {
-            localStorage.setItem('tournament_anim_data_v2', JSON.stringify(state));
-            channel.postMessage(state); // Notificar cambios en tiempo real a OBS
+            localStorage.setItem('tournament_anim_data_v4', JSON.stringify(state));
+            try {
+                channel.postMessage(state);
+            } catch(e){}
         }
 
-        // Escuchar actualización enviada desde la ventana de edición
         channel.onmessage = (event) => {
-            state = event.data;
-            updatePreview();
+            if (event.data) {
+                state = event.data;
+                updatePreview();
+            }
         };
 
-        // Escuchar eventos de actualización de almacenamiento del navegador
-        window.addEventListener('storage', () => {
-            loadState();
-            updatePreview();
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'tournament_anim_data_v4') {
+                loadState();
+                updatePreview();
+            }
         });
 
         const cfgTitle = document.getElementById('cfgTitle');
@@ -664,10 +667,13 @@
         const stage = document.getElementById('stage');
 
         function init() {
-            // Verificar si la URL contiene ?obs=true para ocultar el panel de control
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('obs') === 'true') {
                 document.body.classList.add('obs-mode');
+                setInterval(() => {
+                    loadState();
+                    updatePreview();
+                }, 500);
             }
 
             loadState();
