@@ -277,11 +277,11 @@
             background: var(--accent-hover);
         }
 
-        .btn-obs-gen {
+        .btn-obs-sync {
             background: #10b981;
             margin-top: 15px;
         }
-        .btn-obs-gen:hover {
+        .btn-obs-sync:hover {
             background: #059669;
         }
 
@@ -554,8 +554,8 @@
             </div>
         </div>
 
-        <!-- Botón para generar enlace para OBS -->
-        <button class="btn-action btn-obs-gen" onclick="generateObsLink()">🔗 Obtener Enlace para OBS</button>
+        <!-- Botón para forzar actualización en OBS -->
+        <button class="btn-action btn-obs-sync" onclick="forceObsRefresh()">🔄 Actualizar OBS Ahora</button>
     </div>
 
     <!-- PREVIEW AREA -->
@@ -616,43 +616,71 @@
 
         let state = { ...DEFAULT_DATA };
 
-        function loadState() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const packedData = urlParams.get('data');
-            if (packedData) {
-                try {
-                    state = JSON.parse(decodeURIComponent(escape(atob(packedData))));
-                    return;
-                } catch(e) {
-                    console.error("Error al decodificar datos");
-                }
-            }
-
-            const saved = localStorage.getItem('tournament_anim_data_v9');
-            if (saved) {
-                try {
-                    state = JSON.parse(saved);
-                } catch(e) {
-                    state = JSON.parse(JSON.stringify(DEFAULT_DATA));
-                }
-            }
-        }
-
-        function saveState() {
-            localStorage.setItem('tournament_anim_data_v9', JSON.stringify(state));
-        }
-
-        function generateObsLink() {
-            const jsonStr = JSON.stringify(state);
-            const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
-            const baseUrl = window.location.origin + window.location.pathname;
-            const finalUrl = `${baseUrl}?obs=true&data=${encoded}`;
-
-            navigator.clipboard.writeText(finalUrl).then(() => {
-                alert("¡Enlace para OBS copiado al portapapeles con éxito!\n\nPégalo en las propiedades del Navegador en OBS.");
-            }).catch(() => {
-                prompt("Copia este enlace para OBS:", finalUrl);
+        // Base de datos local (IndexedDB) para guardar imágenes pesadas sin límite de espacio ni errores de URL
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('TournamentDB', 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('storage')) {
+                        db.createObjectStore('storage');
+                    }
+                };
             });
+        }
+
+        async function saveToDB(data) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction('storage', 'readwrite');
+                const store = tx.objectStore('storage');
+                store.put(data, 'currentState');
+                return new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch(e) {
+                console.error("Error guardando en DB", e);
+            }
+        }
+
+        async function loadFromDB() {
+            try {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('storage', 'readonly');
+                    const store = tx.objectStore('storage');
+                    const req = store.get('currentState');
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            } catch(e) {
+                return null;
+            }
+        }
+
+        async function loadState() {
+            const data = await loadFromDB();
+            if (data) {
+                state = data;
+            } else {
+                const saved = localStorage.getItem('tournament_anim_data_v10');
+                if (saved) {
+                    try { state = JSON.parse(saved); } catch(e){}
+                }
+            }
+        }
+
+        async function saveState() {
+            localStorage.setItem('tournament_anim_data_v10', JSON.stringify(state));
+            await saveFromDB(state);
+        }
+
+        async function forceObsRefresh() {
+            await saveState();
+            alert("¡Cambios guardados! Ve a OBS, haz clic derecho en la fuente Navegador, selecciona 'Interactuar' o dale al botón de actualizar y se reflejará al instante.");
         }
 
         const cfgTitle = document.getElementById('cfgTitle');
@@ -672,13 +700,21 @@
         const displayOrgLogo = document.getElementById('displayOrgLogo');
         const stage = document.getElementById('stage');
 
-        function init() {
+        async function init() {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('obs') === 'true') {
                 document.body.classList.add('obs-mode');
+                // Si está en OBS, revisa cambios en la base de datos local cada 1 segundo automáticamente
+                setInterval(async () => {
+                    const freshData = await loadFromDB();
+                    if (freshData) {
+                        state = freshData;
+                        updatePreview();
+                    }
+                }, 1000);
             }
 
-            loadState();
+            await loadState();
             syncFormValues();
             buildTeamsUI();
             buildSponsorsUI();
