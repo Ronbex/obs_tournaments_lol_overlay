@@ -350,7 +350,7 @@
             text-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
 
-        /* Grilla de Equipos */
+        /* Grilla de Equipos sin parpadeos ni animaciones repetitivas */
         .teams-container {
             display: flex;
             flex-wrap: wrap;
@@ -367,16 +367,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            opacity: 0;
-            transform: translateY(25px) scale(0.95);
-            animation: teamAppear 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        @keyframes teamAppear {
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
+            opacity: 1;
+            transform: none;
         }
 
         .team-avatar-frame {
@@ -584,7 +576,8 @@
     </div>
 
     <script>
-        const channel = new BroadcastChannel('obs_overlay_sync');
+        // Sincronizador de comunicación entre la pestaña de edición y OBS
+        const channel = new BroadcastChannel('obs_overlay_sync_v2');
 
         const BG_PRESETS = {
             default: 'linear-gradient(135deg, #0b1329 0%, #1c3564 50%, #080c18 100%)',
@@ -618,7 +611,7 @@
         let state = { ...DEFAULT_DATA };
 
         function loadState() {
-            const saved = localStorage.getItem('tournament_anim_data_v4');
+            const saved = localStorage.getItem('tournament_anim_data_v5');
             if (saved) {
                 try {
                     state = JSON.parse(saved);
@@ -629,12 +622,13 @@
         }
 
         function saveState() {
-            localStorage.setItem('tournament_anim_data_v4', JSON.stringify(state));
+            localStorage.setItem('tournament_anim_data_v5', JSON.stringify(state));
             try {
                 channel.postMessage(state);
             } catch(e){}
         }
 
+        // Recibir cambios instantáneos mediante BroadcastChannel o eventos de storage
         channel.onmessage = (event) => {
             if (event.data) {
                 state = event.data;
@@ -643,7 +637,7 @@
         };
 
         window.addEventListener('storage', (e) => {
-            if (e.key === 'tournament_anim_data_v4') {
+            if (e.key === 'tournament_anim_data_v5') {
                 loadState();
                 updatePreview();
             }
@@ -670,10 +664,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('obs') === 'true') {
                 document.body.classList.add('obs-mode');
-                setInterval(() => {
-                    loadState();
-                    updatePreview();
-                }, 500);
             }
 
             loadState();
@@ -820,7 +810,6 @@
                 const card = document.createElement('div');
                 card.className = 'team-card';
                 card.style.width = `${cardWidth}px`;
-                card.style.animationDelay = `${idx * 0.03}s`;
 
                 const defaultIcon = `<svg width="40" height="40" fill="rgba(255,255,255,0.4)" viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 3.83L19.13 19H4.87L12 5.83z"/></svg>`;
                 const teamName = team.name.trim() !== '' ? team.name : `Equipo ${idx + 1}`;
