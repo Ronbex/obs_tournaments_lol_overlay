@@ -16,6 +16,8 @@
             --input-bg: #0f1117;
             --accent: #3b82f6;
             --accent-hover: #2563eb;
+            --success: #10b981;
+            --success-hover: #059669;
             --danger: #ef4444;
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
@@ -66,6 +68,25 @@
             transform: scale(1) !important;
             width: 100% !important;
             height: 100% !important;
+        }
+
+        /* Pantalla de carga para OBS si no hay archivo cargado */
+        .obs-loader-screen {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #0f1117;
+            z-index: 999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+        body.obs-mode.needs-file .obs-loader-screen {
+            display: flex;
         }
 
         /* --- UI PANEL LATERAL --- */
@@ -277,12 +298,12 @@
             background: var(--accent-hover);
         }
 
-        .btn-obs-sync {
-            background: #10b981;
+        .btn-save-file {
+            background: var(--success);
             margin-top: 15px;
         }
-        .btn-obs-sync:hover {
-            background: #059669;
+        .btn-save-file:hover {
+            background: var(--success-hover);
         }
 
         .btn-danger-icon {
@@ -484,6 +505,16 @@
 </head>
 <body>
 
+    <!-- Pantalla de carga para OBS si necesita cargar el archivo de config -->
+    <div class="obs-loader-screen" id="obsLoaderScreen">
+        <h2>Overlay de Torneo - OBS</h2>
+        <p>Por favor, carga el archivo de configuración generado desde tu panel:</p>
+        <div class="file-upload-btn" style="width: 300px; padding: 15px; border-color: var(--success); color: var(--success);">
+            <span>📁 Seleccionar archivo .json</span>
+            <input type="file" id="obsConfigFile" accept=".json" onchange="loadConfigFile(event)">
+        </div>
+    </div>
+
     <!-- CONTROL PANEL -->
     <div class="control-panel">
         <div class="panel-header">
@@ -554,8 +585,8 @@
             </div>
         </div>
 
-        <!-- Botón para forzar actualización en OBS -->
-        <button class="btn-action btn-obs-sync" onclick="forceObsRefresh()">🔄 Actualizar OBS Ahora</button>
+        <!-- Botón mágico para exportar archivo de configuración -->
+        <button class="btn-action btn-save-file" onclick="exportConfigJson()">💾 Guardar Archivo de Configuración</button>
     </div>
 
     <!-- PREVIEW AREA -->
@@ -616,71 +647,47 @@
 
         let state = { ...DEFAULT_DATA };
 
-        // Base de datos local (IndexedDB) para guardar imágenes pesadas sin límite de espacio ni errores de URL
-        function openDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open('TournamentDB', 1);
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
-                request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains('storage')) {
-                        db.createObjectStore('storage');
-                    }
-                };
-            });
-        }
-
-        async function saveToDB(data) {
-            try {
-                const db = await openDB();
-                const tx = db.transaction('storage', 'readwrite');
-                const store = tx.objectStore('storage');
-                store.put(data, 'currentState');
-                return new Promise((resolve, reject) => {
-                    tx.oncomplete = () => resolve(true);
-                    tx.onerror = () => reject(tx.error);
-                });
-            } catch(e) {
-                console.error("Error guardando en DB", e);
+        function loadState() {
+            const saved = localStorage.getItem('tournament_config_v11');
+            if (saved) {
+                try { state = JSON.parse(saved); } catch(e){}
             }
         }
 
-        async function loadFromDB() {
-            try {
-                const db = await openDB();
-                return new Promise((resolve, reject) => {
-                    const tx = db.transaction('storage', 'readonly');
-                    const store = tx.objectStore('storage');
-                    const req = store.get('currentState');
-                    req.onsuccess = () => resolve(req.result);
-                    req.onerror = () => reject(req.error);
-                });
-            } catch(e) {
-                return null;
-            }
+        function saveState() {
+            localStorage.setItem('tournament_config_v11', JSON.stringify(state));
         }
 
-        async function loadState() {
-            const data = await loadFromDB();
-            if (data) {
-                state = data;
-            } else {
-                const saved = localStorage.getItem('tournament_anim_data_v10');
-                if (saved) {
-                    try { state = JSON.parse(saved); } catch(e){}
+        function exportConfigJson() {
+            saveState();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "config_torneo.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            alert("¡Archivo 'config_torneo.json' descargado con éxito!\n\nEn OBS, sube este archivo en la pantalla que aparecerá.");
+        }
+
+        function loadConfigFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    state = JSON.parse(e.target.result);
+                    saveState();
+                    document.body.classList.remove('needs-file');
+                    syncFormValues();
+                    buildTeamsUI();
+                    buildSponsorsUI();
+                    updatePreview();
+                } catch(err) {
+                    alert("El archivo no es válido.");
                 }
-            }
-        }
-
-        async function saveState() {
-            localStorage.setItem('tournament_anim_data_v10', JSON.stringify(state));
-            await saveFromDB(state);
-        }
-
-        async function forceObsRefresh() {
-            await saveState();
-            alert("¡Cambios guardados! Ve a OBS, haz clic derecho en la fuente Navegador, selecciona 'Interactuar' o dale al botón de actualizar y se reflejará al instante.");
+            };
+            reader.readAsText(file);
         }
 
         const cfgTitle = document.getElementById('cfgTitle');
@@ -700,21 +707,19 @@
         const displayOrgLogo = document.getElementById('displayOrgLogo');
         const stage = document.getElementById('stage');
 
-        async function init() {
+        function init() {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('obs') === 'true') {
                 document.body.classList.add('obs-mode');
-                // Si está en OBS, revisa cambios en la base de datos local cada 1 segundo automáticamente
-                setInterval(async () => {
-                    const freshData = await loadFromDB();
-                    if (freshData) {
-                        state = freshData;
-                        updatePreview();
-                    }
-                }, 1000);
+                loadState();
+                // Si en OBS no hay datos guardados previamente, pide el archivo
+                if (!state.title && state.teams.length === 4 && !state.teams[0].name) {
+                    document.body.classList.add('needs-file');
+                }
+            } else {
+                loadState();
             }
 
-            await loadState();
             syncFormValues();
             buildTeamsUI();
             buildSponsorsUI();
