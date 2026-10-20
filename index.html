@@ -44,28 +44,9 @@
         }
 
         body.obs-mode .control-panel,
-        body.obs-mode .controls-hint {
-            display: none !important;
-        }
-
-        /* Botón de emergencia visible solo en OBS para forzar carga si hay bloqueo de caché */
-        .obs-sync-btn {
-            display: none;
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 8px;
-            font-weight: 700;
-            cursor: pointer;
-            z-index: 9999;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        }
+        body.obs-mode .controls-hint,
         body.obs-mode .obs-sync-btn {
-            display: block;
+            display: none !important;
         }
 
         body.obs-mode .preview-area {
@@ -428,7 +409,6 @@
             max-height: 2.5em;
         }
 
-        /* Footer */
         .footer-block {
             display: flex;
             justify-content: space-between;
@@ -496,9 +476,6 @@
     </style>
 </head>
 <body>
-
-    <!-- Botón que aparecerá en OBS para forzar lectura de localStorage compartido -->
-    <button class="obs-sync-btn" onclick="forceSync()">🔄 Sincronizar con Web</button>
 
     <!-- CONTROL PANEL -->
     <div class="control-panel">
@@ -598,7 +575,7 @@
     </div>
 
     <script>
-        const channel = new BroadcastChannel('obs_overlay_sync_v3');
+        const channel = new BroadcastChannel('obs_overlay_sync_v4');
 
         const BG_PRESETS = {
             default: 'linear-gradient(135deg, #0b1329 0%, #1c3564 50%, #080c18 100%)',
@@ -632,7 +609,7 @@
         let state = { ...DEFAULT_DATA };
 
         function loadState() {
-            const saved = localStorage.getItem('tournament_anim_data_v6');
+            const saved = localStorage.getItem('tournament_anim_data_v7');
             if (saved) {
                 try {
                     state = JSON.parse(saved);
@@ -643,16 +620,10 @@
         }
 
         function saveState() {
-            localStorage.setItem('tournament_anim_data_v6', JSON.stringify(state));
+            localStorage.setItem('tournament_anim_data_v7', JSON.stringify(state));
             try {
                 channel.postMessage(state);
             } catch(e){}
-        }
-
-        function forceSync() {
-            loadState();
-            updatePreview();
-            alert("¡Sincronizado con éxito!");
         }
 
         channel.onmessage = (event) => {
@@ -663,7 +634,7 @@
         };
 
         window.addEventListener('storage', (e) => {
-            if (e.key === 'tournament_anim_data_v6') {
+            if (e.key === 'tournament_anim_data_v7') {
                 loadState();
                 updatePreview();
             }
